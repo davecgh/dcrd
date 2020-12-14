@@ -44,6 +44,7 @@ import (
 	"github.com/decred/dcrd/internal/netsync"
 	"github.com/decred/dcrd/internal/rpcserver"
 	"github.com/decred/dcrd/internal/version"
+	"github.com/decred/dcrd/lru"
 	"github.com/decred/dcrd/peer/v3"
 	"github.com/decred/dcrd/txscript/v4"
 	"github.com/decred/dcrd/wire"
@@ -512,6 +513,9 @@ type server struct {
 	// recentlyConfirmedTxns tracks transactions that have been confirmed in the
 	// most recent blocks.
 	recentlyConfirmedTxns *apbf.Filter
+
+	// Track recently-seen votes for logging announcements.
+	recentVotes lru.Cache
 }
 
 // serverPeer extends the peer to maintain state shared by the server.
@@ -1062,6 +1066,14 @@ func (sp *serverPeer) OnTx(p *peer.Peer, msg *wire.MsgTx) {
 	iv := wire.NewInvVect(wire.InvTypeTx, tx.Hash())
 	p.AddKnownInventory(iv)
 
+	// Track recently-seen votes for latency logging purposes.
+	best := sp.server.chain.BestSnapshot()
+	istreasuryEnabled, _ := sp.server.chain.IsTreasuryAgendaActive(&best.Hash)
+	if stake.IsSSGen(tx.MsgTx(), istreasuryEnabled) {
+		peerLog.Infof("Received vote %s from peer %s", tx.Hash(), p)
+		sp.server.recentVotes.Add(*tx.Hash())
+	}
+
 	// Queue the transaction up to be handled by the net sync manager and
 	// intentionally block further receives until the transaction is fully
 	// processed and known good or bad.  This helps prevent a malicious peer
@@ -1103,6 +1115,15 @@ func (sp *serverPeer) OnInv(p *peer.Peer, msg *wire.MsgInv) {
 	if len(msg.InvList) == 0 {
 		sp.server.BanPeer(sp)
 		return
+	}
+
+	// Log recently-seen votes for latency tracking purposes.
+	seenVotes := &sp.server.recentVotes
+	for _, invVect := range msg.InvList {
+		if invVect.Type == wire.InvTypeTx && seenVotes.Contains(invVect.Hash) {
+			peerLog.Infof("Received vote announcement for known vote %s from "+
+				"peer %s", invVect.Hash, p)
+		}
 	}
 
 	if !cfg.BlocksOnly {
@@ -3433,6 +3454,7 @@ func newServer(ctx context.Context, listenAddrs []string, db database.DB,
 		lotteryDataBroadcast: make(map[chainhash.Hash]struct{}),
 		recentlyConfirmedTxns: apbf.NewFilter(maxRecentlyConfirmedTxns,
 			recentlyConfirmedTxnsFPRate),
+		recentVotes: lru.NewCache(10),
 	}
 
 	// Create the transaction and address indexes if needed.
