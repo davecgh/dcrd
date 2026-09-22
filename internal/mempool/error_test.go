@@ -30,6 +30,7 @@ func TestErrorKindStringer(t *testing.T) {
 		{ErrTooManyVotes, "ErrTooManyVotes"},
 		{ErrDuplicateRevocation, "ErrDuplicateRevocation"},
 		{ErrOldVote, "ErrOldVote"},
+		{ErrFutureVote, "ErrFutureVote"},
 		{ErrAlreadyExists, "ErrAlreadyExists"},
 		{ErrSeqLockUnmet, "ErrSeqLockUnmet"},
 		{ErrFeeTooHigh, "ErrFeeTooHigh"},
