@@ -1049,11 +1049,7 @@ func (mp *TxPool) fetchInputUtxos(tx *dcrutil.Tx, isTreasuryEnabled bool) (*bloc
 	knownDisapproved := mp.IsRegTxTreeKnownDisapproved(mp.cfg.BestHash())
 	utxoView, err := mp.cfg.FetchUtxoView(tx, !knownDisapproved)
 	if err != nil {
-		var cerr blockchain.RuleError
-		if errors.As(err, &cerr) {
-			return nil, chainRuleError(cerr)
-		}
-		return nil, err
+		return nil, wrapChainRuleError(err)
 	}
 
 	// Attempt to populate any missing inputs from the transaction pool.
@@ -1230,11 +1226,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *dcrutil.Tx, isNew, allowHighFees,
 	// are allowed into blocks.
 	err := blockchain.CheckTransaction(msgTx, mp.cfg.ChainParams, checkTxFlags)
 	if err != nil {
-		var cerr blockchain.RuleError
-		if errors.As(err, &cerr) {
-			return nil, chainRuleError(cerr)
-		}
-		return nil, err
+		return nil, wrapChainRuleError(err)
 	}
 
 	// Determine active agendas based on flags.
@@ -1534,11 +1526,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *dcrutil.Tx, isNew, allowHighFees,
 	if checkSeqLocks {
 		seqLock, err := mp.cfg.CalcSequenceLock(tx, utxoView)
 		if err != nil {
-			var cerr blockchain.RuleError
-			if errors.As(err, &cerr) {
-				return nil, chainRuleError(cerr)
-			}
-			return nil, err
+			return nil, wrapChainRuleError(err)
 		}
 		if !blockchain.SequenceLockActive(seqLock, nextBlockHeight, medianTime) {
 			str := "transaction sequence locks on inputs not met"
@@ -1560,11 +1548,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *dcrutil.Tx, isNew, allowHighFees,
 		nextBlockHeight, utxoView, true, mp.cfg.ChainParams, &bestHeader,
 		isTreasuryEnabled, isAutoRevocationsEnabled, subsidySplitVariant)
 	if err != nil {
-		var cerr blockchain.RuleError
-		if errors.As(err, &cerr) {
-			return nil, chainRuleError(cerr)
-		}
-		return nil, err
+		return nil, wrapChainRuleError(err)
 	}
 
 	// Don't allow transactions with non-standard inputs if the mempool config
@@ -1590,11 +1574,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *dcrutil.Tx, isNew, allowHighFees,
 	totalSigOps, err := blockchain.CountTotalSigOps(tx, false, isVote, utxoView,
 		isTreasuryEnabled)
 	if err != nil {
-		var cerr blockchain.RuleError
-		if errors.As(err, &cerr) {
-			return nil, chainRuleError(cerr)
-		}
-		return nil, err
+		return nil, wrapChainRuleError(err)
 	}
 	if totalSigOps > uint32(mp.cfg.Policy.MaxSigOpsPerTx) {
 		str := fmt.Sprintf("transaction %v has too many sigops: %d > %d",
@@ -1664,11 +1644,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *dcrutil.Tx, isNew, allowHighFees,
 	err = blockchain.ValidateTransactionScripts(tx, utxoView, flags,
 		mp.cfg.SigCache, isAutoRevocationsEnabled)
 	if err != nil {
-		var cerr blockchain.RuleError
-		if errors.As(err, &cerr) {
-			return nil, chainRuleError(cerr)
-		}
-		return nil, err
+		return nil, wrapChainRuleError(err)
 	}
 
 	// Only allow TSpends that have a valid Expiry.
